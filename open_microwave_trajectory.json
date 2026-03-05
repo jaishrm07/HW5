@@ -1,0 +1,95 @@
+{
+  "task": "open_microwave_by_grasping_handle",
+  "version": "v1",
+  "objective": "Open the microwave door by grasping the red handle and pulling along the door-opening arc.",
+  "frames": {
+    "world": "PyBullet world frame",
+    "microwave_base": "Base frame of microwave object",
+    "handle": "Center of handle link (microwave link index 1)"
+  },
+  "parameters": {
+    "control_dt_sec": 0.0041667,
+    "standoff_distance_m": 0.14,
+    "pre_grasp_distance_m": 0.07,
+    "grasp_distance_m": 0.018,
+    "retreat_distance_m": 0.10,
+    "target_door_joint_angle_rad": -1.45
+  },
+  "trajectory_breakdown": [
+    {
+      "step": 1,
+      "name": "read_scene_state",
+      "goal": "Get current microwave and robot states.",
+      "required_state": [
+        "microwave.base_position",
+        "microwave.base_quaternion",
+        "microwave.handle_position",
+        "microwave.door_joint_angle",
+        "robot.ee_position",
+        "robot.ee_orientation"
+      ],
+      "output": [
+        "handle_pos_world",
+        "hinge_pos_world",
+        "pull_direction_world_xy",
+        "yaw_aligned_to_handle"
+      ]
+    },
+    {
+      "step": 2,
+      "name": "height_align",
+      "goal": "Move end-effector to handle height first.",
+      "motion_rule": "Set target position to [ee_x_current, ee_y_current, handle_z] while keeping current orientation."
+    },
+    {
+      "step": 3,
+      "name": "standoff_at_handle_height",
+      "goal": "Move to a safe point in front of the handle at same z-level.",
+      "motion_rule": "standoff_pos = handle_pos - pull_dir * standoff_distance; standoff_pos.z = handle_z"
+    },
+    {
+      "step": 4,
+      "name": "rotate_in_place_for_horizontal_grasp",
+      "goal": "Rotate wrist and gripper to a horizontal side-grasp orientation.",
+      "orientation_rule": {
+        "type": "euler_rpy",
+        "formula": "[3*pi/4, 0, yaw_aligned_to_handle]"
+      },
+      "constraint": "Position stays at standoff_pos during rotation."
+    },
+    {
+      "step": 5,
+      "name": "forward_approach",
+      "goal": "Move forward at same height toward handle.",
+      "waypoints": [
+        "pre_grasp_pos = handle_pos - pull_dir * pre_grasp_distance; pre_grasp_pos.z = handle_z",
+        "grasp_pos = handle_pos - pull_dir * grasp_distance; grasp_pos.z = handle_z"
+      ],
+      "constraint": "Keep horizontal grasp orientation."
+    },
+    {
+      "step": 6,
+      "name": "close_gripper_on_handle",
+      "goal": "Close fingers to grip handle.",
+      "stabilization": "Hold pose briefly after closing for contact stabilization.",
+      "validation": "Check finger-handle contact count > 0 if available."
+    },
+    {
+      "step": 7,
+      "name": "pull_and_open_door",
+      "goal": "Open door by pulling while tracking handle motion.",
+      "motion_rule": "Advance door joint from current angle to target_door_joint_angle_rad and continuously track updated handle position with same grasp offset and orientation."
+    },
+    {
+      "step": 8,
+      "name": "retreat",
+      "goal": "Move up to a safe pose after opening.",
+      "motion_rule": "retreat_pos = ee_current + [0, 0, retreat_distance_m]"
+    }
+  ],
+  "success_criteria": [
+    "Door joint angle reaches target_door_joint_angle_rad (or lower if fully open limit is lower).",
+    "No major collision with door panel during grasp approach.",
+    "Gripper remains approximately aligned with handle direction during pull."
+  ]
+}

@@ -5,10 +5,11 @@ import os
 import time
 from robot import Panda
 from objects import objects
+from helper_functions import move_elbow_forearm_joint, pick_cube, place_in_microwave, go_home
 
 
 # parameters
-control_dt = 1. / 240.
+control_dt = 1. / 120.
 
 # create simulation and place camera
 physicsClient = p.connect(p.GUI)
@@ -35,14 +36,24 @@ panda = Panda(basePosition=[0, 0, 0],
                 baseOrientation=p.getQuaternionFromEuler([0, 0, 0]),
                 jointStartPositions=jointStartPositions)
 
-# main loop
+# one-time test: move elbow/forearm bend joint
+did_move_elbow = False
+
+
 while True:
 
     # example how how you can get information about objects
     # try printing these states to see what they contain
     robot_state = panda.get_state()
     cube1_state = cube1.get_state()
+    cube2_state = cube2.get_state()
+    cube3_state = cube3.get_state()
     cabinet_state = cabinet.get_state()
+    microwave_state = microwave.get_state()
+
+    if not did_move_elbow:
+        move_elbow_forearm_joint(panda, delta_rad=-0.6, control_dt=control_dt, joint_index=3)
+        did_move_elbow = True
 
     # step the simulation
     p.stepSimulation()

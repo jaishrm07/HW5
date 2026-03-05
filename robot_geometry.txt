@@ -1,0 +1,94 @@
+Robot + Scene Geometry Understanding (from robot.py, main.py, and URDFs)
+=========================================================================
+
+1) Global frame and scene layout
+--------------------------------
+- Simulation uses PyBullet world frame:
+  - +Z is up, gravity is (0, 0, -9.81).
+  - Units are meters and radians.
+- A ground plane is loaded at basePosition = [0, 0, -0.625].
+- A table is loaded at basePosition = [0.5, 0, -0.625].
+  - Table AABB at load time: min (-0.251, -0.501, -0.051), max (1.251, 0.501, 0.001).
+  - Practical tabletop height is ~z = 0.0.
+
+
+2) Robot geometry (Franka Panda model)
+--------------------------------------
+- Robot base is fixed at world origin:
+  - basePosition = [0, 0, 0], baseOrientation = [0, 0, 0] (Euler).
+- URDF file: franka_panda/panda.urdf.
+- Total joints in model: 12 (indices 0..11).
+  - Arm revolute joints: 0..6 (panda_joint1..panda_joint7).
+  - Fixed structure joints: 7 (panda_joint8), 8 (panda_hand_joint), 11 (panda_grasptarget_hand).
+  - Gripper finger prismatic joints: 9, 10.
+- Joint axes and limits (from loaded URDF):
+  - j0..j6 axis (0,0,1), limits [-6, 6] rad each.
+  - j9 axis (0,1,0), limits [0, 0.04] m.
+  - j10 axis (0,-1,0), limits [0, 0.04] m (mimics j9 in URDF).
+
+Kinematic offsets in chain (important origins):
+- j1 origin:  [0, 0, 0.333]
+- j3 origin:  [0, -0.316, 0]
+- j4 origin:  [0.0825, 0, 0]
+- j5 origin:  [-0.0825, 0.384, 0]
+- j7 origin:  [0.088, 0, 0]
+- fixed j8:   [0, 0, 0.107]
+- grasp target from hand: [0, 0, 0.105]
+
+Gripper geometry and actuation:
+- open_gripper() sets finger targets [0.04, 0.04] m.
+- close_gripper() sets finger targets [0.0, 0.0] m.
+- In this codebase, end-effector is link index 11 (panda_grasptarget).
+
+Current initialization pose (from main.py + reset joints):
+- jointStartPositions = [0, 0, 0, -pi/2, 0, pi/2, pi/4, 0, 0, 0.04, 0.04]
+- Initial EE world position: ~ (0.5545, 0.0, 0.5195)
+- Initial EE orientation (Euler): ~ (pi, 0, 0)
+
+Controller interface in robot.py:
+- IK target link: 11.
+- move_to_pose():
+  - If ee_rotz is given, orientation used is quaternion(Euler=[pi, 0, ee_rotz]).
+  - If ee_quaternion is given, it is used directly.
+- Joint control command is sent to indices range(9), i.e. joints 0..8.
+  - Actuated arm joints are actually 0..6; 7 and 8 are fixed but included in array.
+
+
+3) Scene object geometry and placement (main.py)
+------------------------------------------------
+Simple cubes (objects/simple_objects/cube.urdf):
+- Cube size = 0.05 x 0.05 x 0.05 m.
+- Cube centers at z = 0.025 => cubes rest on tabletop z ~ 0.
+
+Loaded objects and world poses:
+- cube1: position [0.5, -0.3, 0.025], yaw +0.7
+- cube2: position [0.4, -0.2, 0.025], yaw -0.3
+- cube3: position [0.5, -0.1, 0.025], yaw +0.2
+
+- cabinet (collab object):
+  - base position [0.9, -0.3, 0.2], yaw pi
+  - main body dimensions are built from boxes around 0.2 x 0.3 x 0.2 m scale
+  - actuated joint: prismatic slider, range [0, 0.15] m
+  - initial handle world position ~ (0.77, -0.3, 0.25)
+
+- microwave (collab object):
+  - base position [0.5, 0.3, 0.2], yaw -pi/2
+  - body scale from boxes around 0.2 x 0.3 x 0.2 m
+  - door joint: revolute hinge about +Z, limits [-1.5, 0] rad
+  - handle link (red) box size 0.04 x 0.015 x 0.1 m
+  - initial handle world position ~ (0.59, 0.17, 0.2)
+
+
+4) Geometric implications for motion planning
+---------------------------------------------
+- Robot base at [0,0,0] is behind/left of the table center [0.5,0,0], so forward reach is needed for all tasks.
+- Cubes are in a compact region around x ~ 0.4..0.5, y ~ -0.3..-0.1 on tabletop.
+- Microwave is in +y side workspace (y ~ +0.3), cabinet is in -y side workspace (y ~ -0.3).
+- Microwave handle height (~z=0.2) is well below nominal home EE height (~z=0.52), so approach trajectories need controlled descent.
+- Door opening is planar about hinge Z-axis; a stable handle grasp should track an arc around hinge rather than straight-line pull.
+
+
+1. Base swing (near base)
+  2. Shoulder lift
+  3. Elbow/forearm bend (before wrist/gripper)
+  4. Gripper open/close
