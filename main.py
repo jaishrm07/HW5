@@ -5,7 +5,7 @@ import os
 import time
 from robot import Panda
 from objects import objects
-from helper_functions import move_elbow_forearm_joint, pick_cube, place_in_microwave, go_home
+from helper_functions import open_microwave, pick_cube, place_in_microwave
 
 
 # parameters
@@ -36,8 +36,11 @@ panda = Panda(basePosition=[0, 0, 0],
                 baseOrientation=p.getQuaternionFromEuler([0, 0, 0]),
                 jointStartPositions=jointStartPositions)
 
-# one-time test: move elbow/forearm bend joint
-did_move_elbow = False
+# one-time task sequence:
+# 1) open microwave
+# 2) pick cube1
+# 3) place cube1 in microwave
+did_run_tasks = False
 
 
 while True:
@@ -51,9 +54,11 @@ while True:
     cabinet_state = cabinet.get_state()
     microwave_state = microwave.get_state()
 
-    if not did_move_elbow:
-        move_elbow_forearm_joint(panda, delta_rad=-0.6, control_dt=control_dt, joint_index=3)
-        did_move_elbow = True
+    if not did_run_tasks:
+        open_microwave(panda, microwave, control_dt=control_dt)
+        pick_cube(panda, cube1, control_dt=control_dt)
+        place_in_microwave(panda, cube1, microwave, control_dt=control_dt)
+        did_run_tasks = True
 
     # step the simulation
     p.stepSimulation()
