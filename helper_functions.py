@@ -60,45 +60,45 @@ def go_home(panda, control_dt: float = DEFAULT_CONTROL_DT, steps: int = 180):
     return panda.get_state()
 
 
-def move_elbow_forearm_joint(
-    panda,
-    delta_rad: float = -0.6,
-    control_dt: float = DEFAULT_CONTROL_DT,
-    steps: int = 160,
-    joint_index: int = 3,
-):
-    """
-    Move the elbow/forearm bend joint (default Panda arm joint index 3).
+# def move_elbow_forearm_joint(
+#     panda,
+#     delta_rad: float = -0.6,
+#     control_dt: float = DEFAULT_CONTROL_DT,
+#     steps: int = 160,
+#     joint_index: int = 3,
+# ):
+#     """
+#     Move the elbow/forearm bend joint (default Panda arm joint index 3).
 
-    `delta_rad` is added to the current joint value and clamped to the URDF limits.
-    """
-    if joint_index < 0 or joint_index > 6:
-        raise ValueError("joint_index must be one of Panda arm joints 0..6")
+#     `delta_rad` is added to the current joint value and clamped to the URDF limits.
+#     """
+#     if joint_index < 0 or joint_index > 6:
+#         raise ValueError("joint_index must be one of Panda arm joints 0..6")
 
-    current = list(panda.get_state()["joint-position"][:9])
-    target = current.copy()
-    joint_info = p.getJointInfo(panda.panda, joint_index)
-    lower, upper = float(joint_info[8]), float(joint_info[9])
-    target[joint_index] = float(np.clip(current[joint_index] + delta_rad, lower, upper))
+#     current = list(panda.get_state()["joint-position"][:9])
+#     target = current.copy()
+#     joint_info = p.getJointInfo(panda.panda, joint_index)
+#     lower, upper = float(joint_info[8]), float(joint_info[9])
+#     target[joint_index] = float(np.clip(current[joint_index] + delta_rad, lower, upper))
 
-    steps_i = max(2, int(steps))
-    for alpha in np.linspace(0.0, 1.0, steps_i):
-        q_cmd = [(1.0 - alpha) * current[i] + alpha * target[i] for i in range(9)]
-        p.setJointMotorControlArray(
-            panda.panda,
-            range(9),
-            p.POSITION_CONTROL,
-            targetPositions=q_cmd,
-            positionGains=[0.06] * 9,
-        )
-        _step_sim(control_dt, 1)
+#     steps_i = max(2, int(steps))
+#     for alpha in np.linspace(0.0, 1.0, steps_i):
+#         q_cmd = [(1.0 - alpha) * current[i] + alpha * target[i] for i in range(9)]
+#         p.setJointMotorControlArray(
+#             panda.panda,
+#             range(9),
+#             p.POSITION_CONTROL,
+#             targetPositions=q_cmd,
+#             positionGains=[0.06] * 9,
+#         )
+#         _step_sim(control_dt, 1)
 
-    return {
-        "joint_index": joint_index,
-        "start_angle_rad": float(current[joint_index]),
-        "target_angle_rad": float(target[joint_index]),
-        "delta_applied_rad": float(target[joint_index] - current[joint_index]),
-    }
+#     return {
+#         "joint_index": joint_index,
+#         "start_angle_rad": float(current[joint_index]),
+#         "target_angle_rad": float(target[joint_index]),
+#         "delta_applied_rad": float(target[joint_index] - current[joint_index]),
+#     }
 
 
 def open_microwave(
@@ -454,36 +454,36 @@ def pick_cube(
     return cube.get_state()["position"]
 
 
-def place_in_microwave(
-    panda,
-    cube,
-    microwave,
-    control_dt: float = DEFAULT_CONTROL_DT,
-    steps_per_phase: int = 160,
-):
-    """Place a grasped cube inside the microwave and release."""
-    if microwave.get_state()["joint_angle"] > -0.8:
-        raise RuntimeError("Microwave door is not open. Open it before calling place_in_microwave.")
+# def place_in_microwave(
+#     panda,
+#     cube,
+#     microwave,
+#     control_dt: float = DEFAULT_CONTROL_DT,
+#     steps_per_phase: int = 160,
+# ):
+#     """Place a grasped cube inside the microwave and release."""
+#     if microwave.get_state()["joint_angle"] > -0.8:
+#         raise RuntimeError("Microwave door is not open. Open it before calling place_in_microwave.")
 
-    microwave_state = microwave.get_state()
-    base_pos = np.array(microwave_state["base_position"], dtype=float)
-    base_quat = microwave_state["base_quaternion"]
-    base_rot = np.array(p.getMatrixFromQuaternion(base_quat)).reshape(3, 3)
-    ee_yaw = p.getEulerFromQuaternion(base_quat)[2] + np.pi / 2.0
+#     microwave_state = microwave.get_state()
+#     base_pos = np.array(microwave_state["base_position"], dtype=float)
+#     base_quat = microwave_state["base_quaternion"]
+#     base_rot = np.array(p.getMatrixFromQuaternion(base_quat)).reshape(3, 3)
+#     ee_yaw = p.getEulerFromQuaternion(base_quat)[2] + np.pi / 2.0
 
-    entry_pos = base_pos + base_rot @ np.array([0.20, 0.0, 0.03], dtype=float)
-    above_drop_pos = base_pos + base_rot @ np.array([0.05, 0.0, 0.05], dtype=float)
-    drop_pos = base_pos + base_rot @ np.array([0.03, 0.0, -0.02], dtype=float)
-    retreat_pos = entry_pos + np.array([0.0, 0.0, 0.08], dtype=float)
+#     entry_pos = base_pos + base_rot @ np.array([0.20, 0.0, 0.03], dtype=float)
+#     above_drop_pos = base_pos + base_rot @ np.array([0.05, 0.0, 0.05], dtype=float)
+#     drop_pos = base_pos + base_rot @ np.array([0.03, 0.0, -0.02], dtype=float)
+#     retreat_pos = entry_pos + np.array([0.0, 0.0, 0.08], dtype=float)
 
-    current_pose = np.array(panda.get_state()["ee-position"], dtype=float)
-    _move_linear(panda, current_pose, entry_pos, ee_yaw, steps_per_phase, control_dt)
-    _move_linear(panda, entry_pos, above_drop_pos, ee_yaw, steps_per_phase // 2, control_dt)
-    _move_linear(panda, above_drop_pos, drop_pos, ee_yaw, steps_per_phase // 2, control_dt)
+#     current_pose = np.array(panda.get_state()["ee-position"], dtype=float)
+#     _move_linear(panda, current_pose, entry_pos, ee_yaw, steps_per_phase, control_dt)
+#     _move_linear(panda, entry_pos, above_drop_pos, ee_yaw, steps_per_phase // 2, control_dt)
+#     _move_linear(panda, above_drop_pos, drop_pos, ee_yaw, steps_per_phase // 2, control_dt)
 
-    panda.open_gripper()
-    _step_sim(control_dt, 50)
-    _move_linear(panda, drop_pos, above_drop_pos, ee_yaw, steps_per_phase // 2, control_dt)
-    _move_linear(panda, above_drop_pos, retreat_pos, ee_yaw, steps_per_phase // 2, control_dt)
+#     panda.open_gripper()
+#     _step_sim(control_dt, 50)
+#     _move_linear(panda, drop_pos, above_drop_pos, ee_yaw, steps_per_phase // 2, control_dt)
+#     _move_linear(panda, above_drop_pos, retreat_pos, ee_yaw, steps_per_phase // 2, control_dt)
 
-    return cube.get_state()["position"]
+#     return cube.get_state()["position"]

@@ -19,6 +19,10 @@ class KeyboardController:
                         ord("d"): np.array([0, -1, 0, 0, 0, 0, 0, 0]),  # -y
                         ord("q"): np.array([0, 0, +1, 0, 0, 0, 0, 0]),  # +z
                         ord("e"): np.array([0, 0, -1, 0, 0, 0, 0, 0]),  # -z
+                        ord("i"): np.array([0, 0, 0, +1, 0, 0, 0, 0]),  # roll +
+                        ord("j"): np.array([0, 0, 0, -1, 0, 0, 0, 0]),  # roll -
+                        ord("o"): np.array([0, 0, 0, 0, +1, 0, 0, 0]),  # pitch +
+                        ord("k"): np.array([0, 0, 0, 0, -1, 0, 0, 0]),  # pitch -
                         ord("p"): np.array([0, 0, 0, 0, 0, +1, 0, 0]),  # yaw +
                         ord("l"): np.array([0, 0, 0, 0, 0, -1, 0, 0]),  # yaw -
                         ord("z"): np.array([0, 0, 0, 0, 0, 0, +1, 0]),  # open gripper

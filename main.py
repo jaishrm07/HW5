@@ -5,19 +5,20 @@ import os
 import time
 from robot import Panda
 from objects import objects
-from helper_functions import open_microwave, pick_cube, place_in_microwave
+from teleop import KeyboardController
 
 
 # parameters
-control_dt = 1. / 120.
+control_dt = 1. / 240.
 
 # create simulation and place camera
 physicsClient = p.connect(p.GUI)
 p.setGravity(0, 0, -9.81)
+p.configureDebugVisualizer(p.COV_ENABLE_KEYBOARD_SHORTCUTS, 0)
 p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
 p.resetDebugVisualizerCamera(cameraDistance=1.0, 
                                 cameraYaw=40.0,
-                                cameraPitch=-40.0, 
+                                cameraPitch=-30.0, 
                                 cameraTargetPosition=[0.5, 0.0, 0.2])
 
 # load the objects
@@ -36,29 +37,35 @@ panda = Panda(basePosition=[0, 0, 0],
                 baseOrientation=p.getQuaternionFromEuler([0, 0, 0]),
                 jointStartPositions=jointStartPositions)
 
-# one-time task sequence:
-# 1) open microwave
-# 2) pick cube1
-# 3) place cube1 in microwave
-did_run_tasks = False
+# teleoperation interface
+teleop = KeyboardController()
+
+# initial robot targets for teleop updates
+state = panda.get_state()
+target_position = np.array(state["ee-position"], dtype=float)
+target_quaternion = state["ee-quaternion"]
 
 
 while True:
 
-    # example how how you can get information about objects
-    # try printing these states to see what they contain
-    robot_state = panda.get_state()
-    cube1_state = cube1.get_state()
-    cube2_state = cube2.get_state()
-    cube3_state = cube3.get_state()
-    cabinet_state = cabinet.get_state()
-    microwave_state = microwave.get_state()
+    # update end-effector targets from keyboard input
+    action = teleop.get_action()
+    target_position = target_position + action[0:3]
+    target_quaternion = p.multiplyTransforms(
+        [0, 0, 0],
+        p.getQuaternionFromEuler(action[3:6]),
+        [0, 0, 0],
+        target_quaternion,
+    )[1]
 
-    if not did_run_tasks:
-        open_microwave(panda, microwave, control_dt=control_dt)
-        pick_cube(panda, cube1, control_dt=control_dt)
-        place_in_microwave(panda, cube1, microwave, control_dt=control_dt)
-        did_run_tasks = True
+    # move robot to target pose
+    panda.move_to_pose(ee_position=target_position, ee_quaternion=target_quaternion)
+
+    # open/close gripper from keyboard
+    if action[6] == +1:
+        panda.open_gripper()
+    elif action[6] == -1:
+        panda.close_gripper()
 
     # step the simulation
     p.stepSimulation()
