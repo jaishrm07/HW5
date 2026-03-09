@@ -1,0 +1,19 @@
+Issue Observed During Teleoperation
+==================================
+
+- The gripper can touch and sometimes briefly grasp the microwave/cabinet handle.
+- While manually pulling in teleop, the grasp is not stable and the gripper slips off.
+- Result: the user cannot reliably continue opening the microwave/cabinet by teleop-only pulling.
+
+Why Helper Functions Still Work
+===============================
+
+- `open_microwave` and `open_cabinet` do not rely on pure manual contact pulling.
+- They explicitly drive the object joint motion and continuously track handle position with the end-effector.
+- This assisted tracking makes the opening motion much more reliable than raw teleop pulling.
+
+Current Constraint for Strategy
+===============================
+
+- Teleop is good for approach, orientation, and initial grasp.
+- For the actual pull/open phase, helper-assisted execution is currently more reliable than manual teleop.
