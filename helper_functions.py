@@ -429,7 +429,8 @@ def pick_cube(
     control_dt: float = DEFAULT_CONTROL_DT,
     steps_per_phase: int = 140,
     approach_height: float = 0.12,
-    grasp_height: float = 0.02,
+    grasp_height: float = 0.0,
+    grasp_settle_steps: int = 90,
 ):
     """Pick a cube from the table using a top-down grasp."""
     cube_state = cube.get_state()
@@ -437,8 +438,11 @@ def pick_cube(
     cube_yaw = cube_state["euler"][2]
     ee_yaw = cube_yaw
 
-    approach_pos = cube_pos + np.array([0.0, 0.0, approach_height], dtype=float)
-    grasp_pos = cube_pos + np.array([0.0, 0.0, grasp_height], dtype=float)
+    _, cube_aabb_max = p.getAABB(cube.object)
+    cube_top_z = float(cube_aabb_max[2])
+
+    approach_pos = np.array([cube_pos[0], cube_pos[1], cube_top_z + approach_height], dtype=float)
+    grasp_pos = np.array([cube_pos[0], cube_pos[1], cube_top_z + grasp_height], dtype=float)
     lift_pos = approach_pos + np.array([0.0, 0.0, 0.08], dtype=float)
 
     current_pose = np.array(panda.get_state()["ee-position"], dtype=float)
@@ -446,44 +450,12 @@ def pick_cube(
     _step_sim(control_dt, 40)
     _move_linear(panda, current_pose, approach_pos, ee_yaw, steps_per_phase, control_dt)
     _move_linear(panda, approach_pos, grasp_pos, ee_yaw, steps_per_phase // 2, control_dt)
+    for _ in range(max(1, int(grasp_settle_steps))):
+        panda.move_to_pose(grasp_pos.tolist(), ee_rotz=ee_yaw, positionGain=0.08)
+        _step_sim(control_dt, 1)
 
     panda.close_gripper()
     _step_sim(control_dt, 60)
     _move_linear(panda, grasp_pos, lift_pos, ee_yaw, steps_per_phase // 2, control_dt)
 
     return cube.get_state()["position"]
-
-
-# def place_in_microwave(
-#     panda,
-#     cube,
-#     microwave,
-#     control_dt: float = DEFAULT_CONTROL_DT,
-#     steps_per_phase: int = 160,
-# ):
-#     """Place a grasped cube inside the microwave and release."""
-#     if microwave.get_state()["joint_angle"] > -0.8:
-#         raise RuntimeError("Microwave door is not open. Open it before calling place_in_microwave.")
-
-#     microwave_state = microwave.get_state()
-#     base_pos = np.array(microwave_state["base_position"], dtype=float)
-#     base_quat = microwave_state["base_quaternion"]
-#     base_rot = np.array(p.getMatrixFromQuaternion(base_quat)).reshape(3, 3)
-#     ee_yaw = p.getEulerFromQuaternion(base_quat)[2] + np.pi / 2.0
-
-#     entry_pos = base_pos + base_rot @ np.array([0.20, 0.0, 0.03], dtype=float)
-#     above_drop_pos = base_pos + base_rot @ np.array([0.05, 0.0, 0.05], dtype=float)
-#     drop_pos = base_pos + base_rot @ np.array([0.03, 0.0, -0.02], dtype=float)
-#     retreat_pos = entry_pos + np.array([0.0, 0.0, 0.08], dtype=float)
-
-#     current_pose = np.array(panda.get_state()["ee-position"], dtype=float)
-#     _move_linear(panda, current_pose, entry_pos, ee_yaw, steps_per_phase, control_dt)
-#     _move_linear(panda, entry_pos, above_drop_pos, ee_yaw, steps_per_phase // 2, control_dt)
-#     _move_linear(panda, above_drop_pos, drop_pos, ee_yaw, steps_per_phase // 2, control_dt)
-
-#     panda.open_gripper()
-#     _step_sim(control_dt, 50)
-#     _move_linear(panda, drop_pos, above_drop_pos, ee_yaw, steps_per_phase // 2, control_dt)
-#     _move_linear(panda, above_drop_pos, retreat_pos, ee_yaw, steps_per_phase // 2, control_dt)
-
-#     return cube.get_state()["position"]
