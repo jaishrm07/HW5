@@ -49,6 +49,10 @@ def build_scene(gui: bool):
         baseOrientation=p.getQuaternionFromEuler([0, 0, 0]),
         jointStartPositions=joint_start_positions,
     )
+    p.changeDynamics(panda.panda, 9, lateralFriction=6.0)
+    p.changeDynamics(panda.panda, 10, lateralFriction=6.0)
+    p.changeDynamics(microwave.object, 1, lateralFriction=8.0)
+    p.changeDynamics(cabinet.object, 1, lateralFriction=8.0)
 
     return control_dt, panda, {"cube1": cube1, "cube2": cube2, "cube3": cube3}, cabinet, microwave
 

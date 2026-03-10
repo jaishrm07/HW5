@@ -6,7 +6,8 @@ import time
 from robot import Panda
 from objects import objects
 from teleop import KeyboardController
-from helper_functions import go_home, pick_cube
+from helper_functions import close_cabinet, go_home, open_cabinet, open_microwave, pick_cube
+from llm_router import LLMChatRouter
 
 
 # parameters
@@ -39,10 +40,10 @@ panda = Panda(basePosition=[0, 0, 0],
                 jointStartPositions=jointStartPositions)
 
 # increase contact friction for handle grasp stability in teleop
-p.changeDynamics(panda.panda, 9, lateralFriction=2.5)
-p.changeDynamics(panda.panda, 10, lateralFriction=2.5)
-p.changeDynamics(microwave.object, 1, lateralFriction=3.0)
-p.changeDynamics(cabinet.object, 1, lateralFriction=3.0)
+p.changeDynamics(panda.panda, 9, lateralFriction=6.0)
+p.changeDynamics(panda.panda, 10, lateralFriction=6.0)
+p.changeDynamics(microwave.object, 1, lateralFriction=8.0)
+p.changeDynamics(cabinet.object, 1, lateralFriction=8.0)
 
 # always start at home pose
 go_home(panda, control_dt=control_dt)
@@ -61,12 +62,24 @@ toggle_latched = False
 chat_prompt_pending = True
 
 # whitelist and object maps used by chat execution
-ALLOWED_ACTIONS = {"pick_cube", "go_home"}
+ALLOWED_ACTIONS = {"pick_cube", "go_home", "open_microwave", "open_cabinet", "close_cabinet"}
 cube_map = {"cube1": cube1, "cube2": cube2, "cube3": cube3}
 
-print("[mode] chat mode active by default")
-print("[mode] type tasks in chat; type 'teleop' anytime for manual control")
-print("[chat] supported commands: pick cube1/cube2/cube3, go home")
+llm_router = None
+llm_init_error = None
+try:
+    llm_router = LLMChatRouter()
+except Exception as exc:
+    llm_init_error = exc
+    mode = "teleop"
+    chat_prompt_pending = False
+
+if llm_router is not None:
+    print("[mode] llm chat mode active by default")
+    print("[mode] type natural-language tasks; type 'teleop' anytime for manual control")
+else:
+    print(f"[llm] unavailable: {llm_init_error}")
+    print("[mode] starting in teleop because the llm router is unavailable")
 
 
 def _sync_teleop_targets_from_robot():
@@ -75,41 +88,6 @@ def _sync_teleop_targets_from_robot():
     state_now = panda.get_state()
     target_position = np.array(state_now["ee-position"], dtype=float)
     target_quaternion = state_now["ee-quaternion"]
-
-
-def _parse_cube_name(task_text: str) -> str:
-    text = task_text.lower()
-    if "cube2" in text or "cube 2" in text:
-        return "cube2"
-    if "cube3" in text or "cube 3" in text:
-        return "cube3"
-    return "cube1"
-
-
-def _plan_task(task_text: str):
-    """
-    Simple rule-based planner for chat mode.
-    Returns dict: steps, handoff_message, message.
-    """
-    text = task_text.strip().lower()
-    if text in {"", "cancel"}:
-        return {"steps": [], "handoff_message": "", "message": "no task entered. still in chat mode."}
-
-    steps = []
-    if "pick" in text and "cube" in text:
-        steps.append({"action": "pick_cube", "cube": _parse_cube_name(text)})
-    if any(phrase in text for phrase in ("go home", "go to home", "return home")) or text == "home":
-        steps.append({"action": "go_home"})
-
-    if not steps:
-        return {
-            "steps": [],
-            "handoff_message": "",
-            "message": "unsupported task. supported: 'pick cube1/cube2/cube3' or 'go home'.",
-        }
-
-    return {"steps": steps, "handoff_message": "", "message": f"planned {len(steps)} step(s)"}
-
 
 def _run_whitelisted_step(step):
     action = step.get("action", "")
@@ -121,6 +99,7 @@ def _run_whitelisted_step(step):
         if cube_name not in cube_map:
             raise ValueError(f"unknown cube '{cube_name}'")
         pick_cube(panda, cube_map[cube_name], control_dt=control_dt)
+        _sync_teleop_targets_from_robot()
         return
 
     if action == "go_home":
@@ -128,11 +107,48 @@ def _run_whitelisted_step(step):
         _sync_teleop_targets_from_robot()
         return
 
+    if action == "open_microwave":
+        open_microwave(panda, microwave, control_dt=control_dt)
+        go_home(panda, control_dt=control_dt)
+        _sync_teleop_targets_from_robot()
+        return
+
+    if action == "open_cabinet":
+        open_cabinet(panda, cabinet, control_dt=control_dt)
+        go_home(panda, control_dt=control_dt)
+        _sync_teleop_targets_from_robot()
+        return
+
+    if action == "close_cabinet":
+        close_cabinet(panda, cabinet, control_dt=control_dt)
+        go_home(panda, control_dt=control_dt)
+        _sync_teleop_targets_from_robot()
+        return
+
+
+def _execute_llm_tool(tool_name, arguments):
+    global mode, chat_prompt_pending
+
+    if tool_name == "switch_to_teleop":
+        reason = arguments.get("reason", "manual control requested")
+        mode = "teleop"
+        chat_prompt_pending = False
+        _sync_teleop_targets_from_robot()
+        return {"status": "handed_off", "reason": reason}
+
+    step = {"action": tool_name}
+    if tool_name == "pick_cube":
+        step["cube"] = arguments.get("cube_name", "cube1")
+
+    _run_whitelisted_step(step)
+    _sync_teleop_targets_from_robot()
+    return {"status": "ok", "action": tool_name, "arguments": arguments}
+
 
 def _handle_chat_prompt():
     global mode, chat_prompt_pending
 
-    task = input("\n[chat] enter one command (or type 'teleop' / '.' for manual): ").strip()
+    task = input("\n[llm] enter instruction (or type 'teleop' / '.' for manual): ").strip()
     text = task.lower()
     if text in {"teleop", "manual", "exit", "back", "."}:
         mode = "teleop"
@@ -141,19 +157,23 @@ def _handle_chat_prompt():
         print("[mode] returning to teleop")
         return
 
-    plan = _plan_task(task)
-    print(f"[chat] {plan['message']}")
-    if plan["steps"]:
-        print(f"[chat] running {len(plan['steps'])} step(s)")
-        for idx, step in enumerate(plan["steps"], start=1):
-            print(f"[chat] step {idx}/{len(plan['steps'])}: {step}")
-            _run_whitelisted_step(step)
-            _sync_teleop_targets_from_robot()
-        if plan["handoff_message"]:
-            print(f"[chat] {plan['handoff_message']}")
-        print("[chat] command complete")
-    else:
-        print("[chat] no action executed")
+    if llm_router is None:
+        print(f"[llm] unavailable: {llm_init_error}")
+        mode = "teleop"
+        chat_prompt_pending = False
+        _sync_teleop_targets_from_robot()
+        return
+
+    turn = llm_router.run_turn(task, _execute_llm_tool)
+    for idx, step in enumerate(turn["executed_steps"], start=1):
+        print(f"[llm] tool {idx}: {step['tool_name']} args={step['arguments']}")
+
+    if turn["assistant_message"]:
+        print(f"[assistant] {turn['assistant_message']}")
+
+    if mode == "teleop":
+        print("[mode] returning to teleop")
+        return
 
     mode = "chat"
     chat_prompt_pending = True
@@ -164,7 +184,7 @@ def _run_chat_command_once():
     try:
         _handle_chat_prompt()
     except Exception as exc:
-        print(f"[chat] command failed: {exc}")
+        print(f"[llm] command failed: {exc}")
         mode = "chat"
         chat_prompt_pending = True
 
@@ -173,7 +193,7 @@ while True:
     action = teleop.get_action()
 
     if mode == "teleop":
-        # update end-effector targets from keyboard input
+        # update end-effector targets from keyboard input for the teleop mode
         target_position = target_position + action[0:3]
         target_quaternion = p.multiplyTransforms(
             [0, 0, 0],
@@ -182,7 +202,7 @@ while True:
             target_quaternion,
         )[1]
 
-        # move robot to target pose
+        # move robot to target pose for the teleop mode
         panda.move_to_pose(ee_position=target_position, ee_quaternion=target_quaternion)
 
         # open/close gripper from keyboard

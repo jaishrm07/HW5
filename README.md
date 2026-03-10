@@ -31,24 +31,27 @@ python main.py
 
 ## (OPTIONAL) GPT-OSS in Python
 
-Virginia Tech hosts a language model and every student has access to it. 
+Virginia Tech hosts a language model and every student has access to it.
 However, API access is restricted to the VT Campus VPN.
 To set up your free access, follow the instructions [here](https://docs.arc.vt.edu/ai/011_llm_api_arc_vt_edu.html) and get your API key.
 Remember to keep your key private.
 
 ## (OPTIONAL) Connecting to GPT-OSS
 
-Paste your API key into line 5 of `lm-test.py`.
-Then install the OpenAI library and run your code:
+The LLM chat integration is implemented in `llm_router.py` and used by `main.py`.
+Install the OpenAI library, export your API key, and run the main app:
 ```bash
 # Install dependency
 pip install openai
 
-# Run the lm-test script
-python3 lm-test.py
+# Configure the VT-hosted model
+export VT_LLM_API_KEY="your-api-key"
+export VT_LLM_API_BASE="https://llm-api.arc.vt.edu/api/v1"
+export VT_LLM_MODEL="gpt-oss-120b"
+
+# Run the main app
+python3 main.py
 ```
-Try editing the system prompt and user prompt in `lm-test.py`.
-Once you have this working, you can bring it into `main.py` to help create your assistive robot.
 
 ## Assignment
 

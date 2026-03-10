@@ -49,7 +49,7 @@ class Panda():
             p.POSITION_CONTROL,
             targetPositions=[0.0, 0.0],
             positionGains=positionGains,
-            forces=[100, 100],
+            forces=[200, 200],
         )
 
     # open the robot's gripper
